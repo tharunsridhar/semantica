@@ -33,6 +33,7 @@ License: MIT
 """
 
 import importlib.util
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -71,6 +72,10 @@ def _load_docling() -> None:
             return
         DOCLING_AVAILABLE = False
         DOCLING_IMPORT_ERROR = str(e)
+        # semantica.parse holds its own copy of both values
+        package = sys.modules[__package__]
+        package.DOCLING_AVAILABLE = DOCLING_AVAILABLE
+        package.DOCLING_IMPORT_ERROR = DOCLING_IMPORT_ERROR
         raise ImportError(DOCLING_IMPORT_ERROR) from e
     DocumentConverter = DocumentConverter or converter
     InputFormat = InputFormat or input_format

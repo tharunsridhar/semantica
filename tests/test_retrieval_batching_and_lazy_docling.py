@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import importlib
 import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
 from semantica.context.context_retriever import ContextRetriever, RetrievedContext
 from semantica.parse import docling_parser
+from semantica.vector_store import VectorStore
 
 
 class _Store:
@@ -90,3 +93,34 @@ def test_docling_load_failure_is_recorded(monkeypatch):
 
     assert docling_parser.DOCLING_AVAILABLE is False
     assert "docling.datamodel.base_models" in docling_parser.DOCLING_IMPORT_ERROR
+
+
+def test_vector_store_batch_failure_embeds_one_by_one():
+    def generate(data):
+        if isinstance(data, list):
+            raise RuntimeError("batch unavailable")
+        return np.array([1.0, float(len(data))], dtype=np.float32)
+
+    store = VectorStore(backend="inmemory", dimension=2)
+    store.embedder = MagicMock()
+    store.embedder.generate_embeddings.side_effect = generate
+
+    embeddings = store.embed_batch(["a", "bbb"])
+
+    np.testing.assert_array_equal(embeddings, [[1.0, 1.0], [1.0, 3.0]])
+
+
+def test_docling_load_failure_updates_parse_package(monkeypatch):
+    for name in ("DocumentConverter", "InputFormat", "PdfPipelineOptions", "PdfFormatOption"):
+        monkeypatch.setattr(docling_parser, name, None)
+    parse = importlib.import_module("semantica.parse")
+    for module in (docling_parser, parse):
+        monkeypatch.setattr(module, "DOCLING_AVAILABLE", True)
+        monkeypatch.setattr(module, "DOCLING_IMPORT_ERROR", None)
+    monkeypatch.setitem(sys.modules, "docling.datamodel.base_models", None)
+
+    with pytest.raises(ImportError):
+        docling_parser._load_docling()
+
+    assert parse.DOCLING_AVAILABLE is False
+    assert parse.DOCLING_IMPORT_ERROR == docling_parser.DOCLING_IMPORT_ERROR

@@ -353,7 +353,10 @@ class VectorStore:
                     return list(embeddings)
                 return embeddings
             except Exception as e:
-                self.logger.warning(f"Batch embedding generation failed: {e}")
+                self.logger.warning(
+                    f"Batch embedding generation failed, embedding one by one: {e}"
+                )
+                return [self.embed(text) for text in texts]
         
         # Fallback
         self.logger.warning("Using random fallback embeddings for batch")
